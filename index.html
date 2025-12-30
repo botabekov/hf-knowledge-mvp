@@ -3,71 +3,152 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>HF Knowledge MVP (local-in-browser)</title>
+  <title>HF Knowledge MVP (Local in Browser)</title>
   <style>
-    :root { --b:#e5e7eb; --t:#0f172a; --m:#64748b; --p:#2563eb; --bg:#ffffff; }
+    :root{
+      --b:#e5e7eb; --t:#0f172a; --m:#64748b; --p:#2563eb; --bg:#ffffff;
+      --ok:#16a34a; --warn:#b45309; --bad:#dc2626;
+    }
     body{font-family:Inter,system-ui,Segoe UI,Arial; margin:0; background:#f8fafc; color:var(--t);}
-    .wrap{max-width:1100px; margin:24px auto; padding:0 16px;}
+    .wrap{max-width:1150px; margin:24px auto; padding:0 16px;}
     .card{background:var(--bg); border:1px solid var(--b); border-radius:14px; padding:16px; box-shadow:0 4px 14px rgba(15,23,42,.06);}
     h1{font-size:20px; margin:0 0 10px;}
-    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
+    .muted{color:var(--m); font-size:13px; line-height:1.35;}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:12px;}
+    @media (max-width:980px){ .grid{grid-template-columns:1fr;} }
     button{
       border:1px solid var(--b); background:#fff; border-radius:10px; padding:10px 12px;
-      cursor:pointer; font-weight:600;
+      cursor:pointer; font-weight:700;
     }
     button.primary{background:var(--p); color:#fff; border-color:var(--p);}
+    button.danger{background:var(--bad); color:#fff; border-color:var(--bad);}
     button:disabled{opacity:.55; cursor:not-allowed;}
-    .muted{color:var(--m); font-size:13px; line-height:1.35;}
-    .kpi{font-size:13px; color:var(--m);}
-    textarea,input{width:100%; border:1px solid var(--b); border-radius:12px; padding:12px; font:inherit;}
-    textarea{min-height:80px; resize:vertical;}
-    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:12px;}
-    @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+    textarea,input,select{
+      border:1px solid var(--b); border-radius:12px; padding:10px 12px; font:inherit; background:#fff;
+    }
+    textarea{width:100%; min-height:84px; resize:vertical;}
+    input[type="text"]{width:100%;}
     .progress{height:10px; border-radius:999px; background:#eef2ff; overflow:hidden; border:1px solid #e0e7ff;}
     .bar{height:100%; width:0%; background:var(--p); transition:width .15s;}
     .hr{height:1px; background:var(--b); margin:14px 0;}
     .pill{display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--b); border-radius:999px; background:#fff;}
+    .kpi{font-size:13px; color:var(--m);}
+    .note{font-size:12px; color:var(--m);}
+    .ok{color:var(--ok);} .warn{color:var(--warn);} .bad{color:var(--bad);}
     .results{display:flex; flex-direction:column; gap:10px; margin-top:10px;}
     .res{border:1px solid var(--b); border-radius:12px; padding:12px; background:#fff;}
-    .res .top{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
-    .res .src{font-weight:700; font-size:13px;}
-    .res .score{color:var(--m); font-size:12px;}
-    .res pre{white-space:pre-wrap; margin:8px 0 0; color:#111827; font-size:13px; line-height:1.35;}
-    .tag{font-size:12px; color:var(--m);}
-    .warn{color:#b45309;}
-    .ok{color:#16a34a;}
+    .top{display:flex; justify-content:space-between; gap:10px; align-items:flex-start;}
+    .src{font-weight:800; font-size:13px;}
+    .score{color:var(--m); font-size:12px;}
+    .tag{font-size:12px; color:var(--m); margin-top:2px;}
+    pre{white-space:pre-wrap; margin:8px 0 0; color:#111827; font-size:13px; line-height:1.35;}
+    .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+    .btns button{padding:8px 10px; font-weight:700; border-radius:10px;}
+    mark{background:#fde68a; padding:0 2px; border-radius:4px;}
+    .small{font-size:12px; color:var(--m);}
+    .two-col{display:grid; grid-template-columns: 1fr 1fr; gap:10px;}
+    @media (max-width:980px){ .two-col{grid-template-columns:1fr;} }
   </style>
-
-  <!-- Mammoth (DOCX -> text) -->
-  <script src="https://unpkg.com/mammoth@1.2.0/mammoth.browser.min.js"></script>
-  <!-- SheetJS (XLSX -> text) -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>HF Knowledge MVP — локальная база знаний в браузере</h1>
+      <h1>HF Knowledge MVP — база знаний в браузере (без установок)</h1>
       <div class="muted">
-        Данные не отправляются на сервер: ты выбираешь папку/файлы, браузер читает их и строит индекс локально.
-        PDF разбираем через PDF.js (getTextContent), DOCX через Mammoth, XLSX через SheetJS.
+        Работает так: выбираешь папку/файлы → браузер извлекает текст → строит локальный индекс → ищет фрагменты и показывает источники.
+        Данные никуда не отправляются (если ты сам не добавишь сервер).
       </div>
+
       <div class="hr"></div>
 
       <div class="row">
         <button id="pickDirBtn" class="primary">Выбрать папку</button>
-        <button id="pickFilesBtn">Выбрать файлы (или папку)</button>
+        <button id="pickFilesBtn">Выбрать файлы/папку</button>
         <input id="fileInput" type="file" multiple webkitdirectory style="display:none" />
 
         <button id="buildBtn" class="primary" disabled>Построить индекс</button>
-        <span class="kpi" id="kpi">Файлы: 0 • Чанки: 0</span>
+        <button id="clearCacheBtn" class="danger">Очистить кэш</button>
+
+        <span class="kpi" id="kpi">Файлы: 0 • Чанки: 0 • Кэш: 0</span>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <span class="pill">
+          <input id="useCache" type="checkbox" checked />
+          <label for="useCache" class="muted" style="cursor:pointer;">Использовать кэш IndexedDB</label>
+        </span>
+
+        <span class="pill">
+          <input id="cacheIndex" type="checkbox" checked />
+          <label for="cacheIndex" class="muted" style="cursor:pointer;">Кэшировать индекс (chunks)</label>
+        </span>
 
         <span class="pill">
           <input id="useWebllm" type="checkbox" />
-          <label for="useWebllm" class="muted" style="cursor:pointer;">Генерировать ответ WebLLM (тяжёлое, опционально)</label>
+          <label for="useWebllm" class="muted" style="cursor:pointer;">WebLLM (опционально, тяжёлое)</label>
+        </span>
+
+        <span class="pill">
+          <span class="muted">Библиотеки:</span>
+          <span id="libStatus" class="small">—</span>
         </span>
       </div>
 
-      <div style="margin-top:10px">
+      <div class="two-col" style="margin-top:10px;">
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Исключить папки/пути (через запятую)</div>
+          <input id="excludeInput" type="text" value="archive,tmp,~temp,node_modules,.git,__pycache__" />
+          <div class="note" style="margin-top:6px;">
+            Пример: <span class="small">archive,tmp</span> — если в пути встречается слово, файл пропускаем.
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Настройки индекса</div>
+          <div class="row">
+            <span class="pill">
+              <label class="muted">TopK</label>
+              <select id="topK">
+                <option>4</option><option selected>6</option><option>8</option><option>10</option>
+              </select>
+            </span>
+            <span class="pill">
+              <label class="muted">Max файлов</label>
+              <select id="maxFiles">
+                <option>200</option><option selected>500</option><option>800</option><option>1200</option>
+              </select>
+            </span>
+            <span class="pill">
+              <label class="muted">Max размер файла</label>
+              <select id="maxMb">
+                <option>5</option><option selected>15</option><option>25</option><option>50</option>
+              </select>
+            </span>
+          </div>
+
+          <div class="row" style="margin-top:8px;">
+            <span class="pill">
+              <input type="checkbox" id="tPdf" checked />
+              <label for="tPdf" class="muted" style="cursor:pointer;">PDF</label>
+            </span>
+            <span class="pill">
+              <input type="checkbox" id="tDocx" checked />
+              <label for="tDocx" class="muted" style="cursor:pointer;">DOCX</label>
+            </span>
+            <span class="pill">
+              <input type="checkbox" id="tXlsx" checked />
+              <label for="tXlsx" class="muted" style="cursor:pointer;">XLSX</label>
+            </span>
+            <span class="pill">
+              <input type="checkbox" id="tText" checked />
+              <label for="tText" class="muted" style="cursor:pointer;">TXT/MD/CSV/HTML</label>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
         <div class="progress"><div id="bar" class="bar"></div></div>
         <div class="muted" id="status" style="margin-top:6px;">Готово.</div>
       </div>
@@ -80,24 +161,24 @@
           <textarea id="q" placeholder="Например: 'Где описан процесс расчёта FIFO?'"></textarea>
           <div class="row" style="margin-top:10px;">
             <button id="askBtn" class="primary" disabled>Спросить</button>
-            <button id="clearBtn">Очистить</button>
+            <button id="resetBtn">Сбросить</button>
           </div>
           <div class="muted" style="margin-top:8px;">
-            По умолчанию ответ — это топ-фрагменты + источники (надежнее, чем галлюцинации).
-            WebLLM добавляет “красивый” текстовый ответ, но может быть тяжелым и требовать WebGPU.
+            По умолчанию — честный режим: <b>фрагменты + источники</b>. WebLLM (если включить) просто “пересказывает” найденное.
           </div>
         </div>
 
         <div>
-          <div class="muted" style="margin-bottom:6px;">Ответ (если WebLLM включён)</div>
-          <textarea id="answer" placeholder="Тут появится сгенерированный ответ (опционально)"></textarea>
+          <div class="muted" style="margin-bottom:6px;">Ответ WebLLM (опционально)</div>
+          <textarea id="answer" placeholder="Появится только если включить WebLLM"></textarea>
           <div class="muted" style="margin-top:8px;">
-            Если WebLLM не включён — просто смотри “Найденные фрагменты” ниже.
+            Если в компании WebGPU/скачивание модели запрещены — оставляй выключенным.
           </div>
         </div>
       </div>
 
       <div class="hr"></div>
+
       <div>
         <div class="muted">Найденные фрагменты (доказательства)</div>
         <div id="results" class="results"></div>
@@ -105,433 +186,802 @@
     </div>
   </div>
 
-  <script type="module">
-    // --- PDF.js (ESM) ---
-    // Берём с cdnjs актуальную ESM-сборку.
-    // Если корпоративная сеть блокирует cdnjs — заменишь на другой CDN (jsdelivr/npm pdfjs-dist).
-    import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.mjs";
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.mjs";
+<script>
+/* =========================
+   0) Helpers / UI
+========================= */
+const $ = (id) => document.getElementById(id);
 
-    const $ = (id) => document.getElementById(id);
+const pickDirBtn = $("pickDirBtn");
+const pickFilesBtn = $("pickFilesBtn");
+const fileInput = $("fileInput");
+const buildBtn = $("buildBtn");
+const askBtn = $("askBtn");
+const resetBtn = $("resetBtn");
+const clearCacheBtn = $("clearCacheBtn");
 
-    const pickDirBtn = $("pickDirBtn");
-    const pickFilesBtn = $("pickFilesBtn");
-    const fileInput = $("fileInput");
-    const buildBtn = $("buildBtn");
-    const askBtn = $("askBtn");
-    const clearBtn = $("clearBtn");
-    const useWebllm = $("useWebllm");
+const useCache = $("useCache");
+const cacheIndex = $("cacheIndex");
+const useWebllm = $("useWebllm");
 
-    const statusEl = $("status");
-    const barEl = $("bar");
-    const kpiEl = $("kpi");
-    const resultsEl = $("results");
-    const qEl = $("q");
-    const ansEl = $("answer");
+const excludeInput = $("excludeInput");
+const topKSel = $("topK");
+const maxFilesSel = $("maxFiles");
+const maxMbSel = $("maxMb");
 
-    // Данные
-    /** @type {File[]} */
-    let files = [];
-    /** chunks: { id, text, source } */
-    let chunks = [];
+const tPdf = $("tPdf");
+const tDocx = $("tDocx");
+const tXlsx = $("tXlsx");
+const tText = $("tText");
 
-    // BM25 индекс
-    let docTF = [];   // Array<Map<term, tf>>
-    let docLen = [];  // Array<number>
-    let df = new Map();
-    let avgdl = 0;
+const statusEl = $("status");
+const barEl = $("bar");
+const kpiEl = $("kpi");
+const libStatusEl = $("libStatus");
 
-    // WebLLM
-    let webllmEngine = null;
-    let webllmLoading = false;
+const resultsEl = $("results");
+const qEl = $("q");
+const ansEl = $("answer");
 
-    // Настройки MVP
-    const MAX_FILES = 800;            // чтобы браузер не умер
-    const MAX_TEXT_PER_FILE = 700_000; // ограничение на текст из одного файла
-    const CHUNK_SIZE = 1400;          // символов
-    const CHUNK_OVERLAP = 250;        // символов
-    const TOP_K = 6;
+function setStatus(text, pct=null) {
+  statusEl.textContent = text;
+  if (pct !== null) barEl.style.width = Math.max(0, Math.min(100, pct)) + "%";
+}
 
-    const stopwords = new Set([
-      // RU
-      "и","в","во","на","к","ко","с","со","из","у","о","об","от","до","для","по","при","над","под","это","как","что","или","не","да",
-      "мы","вы","они","он","она","оно","я","ты","а","но","же","ли","бы","то","там","тут","где","когда",
-      // EN
-      "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were","be","been","by","as","at","from","that","this"
-    ]);
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+  }[c]));
+}
 
-    function setStatus(text, pct=null) {
-      statusEl.textContent = text;
-      if (pct !== null) barEl.style.width = Math.max(0, Math.min(100, pct)) + "%";
+function escapeRegExp(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+function normalizeText(s) {
+  return (s || "")
+    .replace(/\u0000/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* =========================
+   1) Vendor/CDN загрузка библиотек
+   vendor/:
+     pdf.mjs, pdf.worker.mjs, mammoth.browser.min.js, xlsx.full.min.js
+========================= */
+let pdfjsLib = null;
+
+async function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.onload = () => resolve(true);
+    s.onerror = () => reject(new Error("Failed: " + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureMammoth() {
+  if (window.mammoth) return true;
+  try {
+    await loadScript("./vendor/mammoth.browser.min.js");
+    return true;
+  } catch {
+    await loadScript("https://unpkg.com/mammoth@1.2.0/mammoth.browser.min.js");
+    return true;
+  }
+}
+
+async function ensureXLSX() {
+  if (window.XLSX) return true;
+  try {
+    await loadScript("./vendor/xlsx.full.min.js");
+    return true;
+  } catch {
+    await loadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
+    return true;
+  }
+}
+
+async function ensurePDFJS() {
+  if (pdfjsLib) return true;
+  // 1) пробуем vendor
+  try {
+    pdfjsLib = await import("./vendor/pdf.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.mjs";
+    return true;
+  } catch (e1) {
+    // 2) fallback CDN
+    try {
+      pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.mjs");
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.mjs";
+      return true;
+    } catch (e2) {
+      console.error(e1, e2);
+      return false;
     }
+  }
+}
 
-    function updateKPI() {
-      kpiEl.textContent = `Файлы: ${files.length} • Чанки: ${chunks.length}`;
-    }
+async function initLibs() {
+  setStatus("Загрузка библиотек…", 2);
+  const res = await Promise.allSettled([ensurePDFJS(), ensureMammoth(), ensureXLSX()]);
+  const okPdf = res[0].status === "fulfilled" && res[0].value === true;
+  const okDocx = res[1].status === "fulfilled";
+  const okXlsx = res[2].status === "fulfilled";
 
-    function ext(name) {
-      const i = name.lastIndexOf(".");
-      return i >= 0 ? name.slice(i+1).toLowerCase() : "";
-    }
+  const parts = [
+    `PDF.js: ${okPdf ? "OK" : "FAIL"}`,
+    `Mammoth: ${okDocx ? "OK" : "FAIL"}`,
+    `XLSX: ${okXlsx ? "OK" : "FAIL"}`
+  ];
+  libStatusEl.innerHTML = parts.map(p => `<span class="${p.includes("OK")?"ok":"bad"}">${escapeHtml(p)}</span>`).join(" • ");
+  if (!okPdf) setStatus("PDF.js не загрузился. PDF читать не сможем (проверь vendor/ или доступ к CDN).", 0);
+  else setStatus("Библиотеки готовы.", 5);
+}
 
-    function normalizeText(s) {
-      return (s || "")
-        .replace(/\u0000/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
+/* =========================
+   2) IndexedDB cache
+   - store: files (text by fingerprint)
+   - store: index (chunks by current selection)
+========================= */
+const DB_NAME = "hfkb_mvp_cache_v1";
+const DB_VER = 1;
+const STORE_FILES = "files";
+const STORE_INDEX = "index";
 
-    function chunkText(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP) {
-      const out = [];
-      if (!text) return out;
-      let i = 0;
-      while (i < text.length) {
-        const piece = text.slice(i, i + size);
-        if (piece.trim().length > 40) out.push(piece.trim());
-        i += Math.max(50, size - overlap);
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_FILES)) {
+        db.createObjectStore(STORE_FILES, { keyPath: "key" });
       }
-      return out;
-    }
-
-    function tokenize(text) {
-      // простая токенизация: буквы/цифры, в нижний регистр
-      return normalizeText(text)
-        .toLowerCase()
-        .replace(/[^a-zа-я0-9]+/giu, " ")
-        .split(" ")
-        .filter(t => t.length >= 2 && !stopwords.has(t));
-    }
-
-    async function readTxtLike(file) {
-      const t = await file.text();
-      return t.slice(0, MAX_TEXT_PER_FILE);
-    }
-
-    async function readPdf(file) {
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-      let all = "";
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const tc = await page.getTextContent();
-        const pageText = tc.items.map(it => it.str).join(" ");
-        all += "\\n" + pageText;
-        if (all.length > MAX_TEXT_PER_FILE) break;
+      if (!db.objectStoreNames.contains(STORE_INDEX)) {
+        db.createObjectStore(STORE_INDEX, { keyPath: "key" });
       }
-      return all.slice(0, MAX_TEXT_PER_FILE);
-    }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
 
-    async function readDocx(file) {
-      const buf = await file.arrayBuffer();
-      // Mammoth: extractRawText
-      const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
-      return (res.value || "").slice(0, MAX_TEXT_PER_FILE);
-    }
+async function idbGet(storeName, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const st = tx.objectStore(storeName);
+    const req = st.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
 
-    async function readXlsx(file) {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      let out = "";
-      for (const sheetName of wb.SheetNames) {
-        const ws = wb.Sheets[sheetName];
-        // to CSV — быстро и нормально для индекса
-        const csv = XLSX.utils.sheet_to_csv(ws, { FS: "\\t" });
-        out += `\\n\\n### SHEET: ${sheetName}\\n` + csv;
-        if (out.length > MAX_TEXT_PER_FILE) break;
+async function idbPut(storeName, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const st = tx.objectStore(storeName);
+    const req = st.put(value);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbClearAll() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_FILES, STORE_INDEX], "readwrite");
+    tx.objectStore(STORE_FILES).clear();
+    tx.objectStore(STORE_INDEX).clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbCountAll() {
+  const db = await openDB();
+  const countStore = (name) => new Promise((resolve) => {
+    const tx = db.transaction(name, "readonly");
+    const st = tx.objectStore(name);
+    const req = st.count();
+    req.onsuccess = () => resolve(req.result || 0);
+    req.onerror = () => resolve(0);
+  });
+  const a = await countStore(STORE_FILES);
+  const b = await countStore(STORE_INDEX);
+  return a + b;
+}
+
+/* =========================
+   3) Данные / BM25
+========================= */
+let files = [];   // File[]
+let chunks = [];  // {id, text, source}
+let docTF = [];   // Array<Map<term, tf>>
+let docLen = [];  // Array<number>
+let df = new Map();
+let avgdl = 0;
+
+const stopwords = new Set([
+  // RU
+  "и","в","во","на","к","ко","с","со","из","у","о","об","от","до","для","по","при","над","под","это","как","что","или","не","да",
+  "мы","вы","они","он","она","оно","я","ты","а","но","же","ли","бы","то","там","тут","где","когда",
+  // EN
+  "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were","be","been","by","as","at","from","that","this"
+]);
+
+function updateKPI(cacheCount=0) {
+  kpiEl.textContent = `Файлы: ${files.length} • Чанки: ${chunks.length} • Кэш: ${cacheCount}`;
+}
+
+function tokenize(text) {
+  return normalizeText(text)
+    .toLowerCase()
+    .replace(/[^a-zа-я0-9]+/giu, " ")
+    .split(" ")
+    .filter(t => t.length >= 2 && !stopwords.has(t));
+}
+
+function chunkText(text, size=1400, overlap=250) {
+  const out = [];
+  if (!text) return out;
+  let i = 0;
+  while (i < text.length) {
+    const piece = text.slice(i, i + size);
+    if (piece.trim().length > 50) out.push(piece.trim());
+    i += Math.max(80, size - overlap);
+  }
+  return out;
+}
+
+function buildBM25() {
+  df = new Map();
+  docTF = [];
+  docLen = [];
+
+  let totalLen = 0;
+  for (const ch of chunks) {
+    const toks = tokenize(ch.text);
+    totalLen += toks.length;
+    docLen.push(toks.length);
+
+    const tf = new Map();
+    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+    docTF.push(tf);
+
+    for (const term of new Set(toks)) df.set(term, (df.get(term) || 0) + 1);
+  }
+  avgdl = chunks.length ? totalLen / chunks.length : 0;
+}
+
+function bm25Score(query, idx) {
+  const N = chunks.length;
+  const k1 = 1.5;
+  const b = 0.75;
+  const qTerms = tokenize(query);
+  const tf = docTF[idx];
+  const dl = docLen[idx] || 0;
+
+  let score = 0;
+  for (const term of qTerms) {
+    const f = tf.get(term) || 0;
+    const n = df.get(term) || 0;
+    if (!f || !n) continue;
+    const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
+    const denom = f + k1 * (1 - b + b * (dl / (avgdl || 1)));
+    score += idf * (f * (k1 + 1)) / (denom || 1);
+  }
+  return score;
+}
+
+function searchTop(query, k=6) {
+  const scored = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const s = bm25Score(query, i);
+    if (s > 0) scored.push({ i, s });
+  }
+  scored.sort((a,b)=>b.s-a.s);
+  return scored.slice(0, k);
+}
+
+function highlight(text, query) {
+  const terms = Array.from(new Set(tokenize(query))).slice(0, 12);
+  let safe = escapeHtml(text);
+  for (const t of terms) {
+    const re = new RegExp(`\\b(${escapeRegExp(t)})\\b`, "giu");
+    safe = safe.replace(re, "<mark>$1</mark>");
+  }
+  return safe;
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    return true;
+  }
+}
+
+function renderResults(items, query) {
+  resultsEl.innerHTML = "";
+  ansEl.value = "";
+
+  if (!items.length) {
+    resultsEl.innerHTML = `<div class="muted warn">Ничего релевантного не найдено. Попробуй другими словами.</div>`;
+    return;
+  }
+
+  for (const it of items) {
+    const ch = chunks[it.i];
+    const full = ch.text;
+    const short = full.length > 900 ? full.slice(0, 900) + "…" : full;
+
+    const div = document.createElement("div");
+    div.className = "res";
+
+    const id = `res_${it.i}_${Math.random().toString(16).slice(2)}`;
+    div.innerHTML = `
+      <div class="top">
+        <div>
+          <div class="src">${escapeHtml(ch.source)}</div>
+          <div class="tag">chunk #${ch.id}</div>
+        </div>
+        <div class="score">score: ${it.s.toFixed(3)}</div>
+      </div>
+      <pre id="${id}_text">${highlight(short, query)}</pre>
+      <div class="btns">
+        <button id="${id}_toggle">Показать полностью</button>
+        <button id="${id}_copyQ">Copy цитату</button>
+        <button id="${id}_copyS">Copy источник</button>
+      </div>
+      <div class="small">Совет: если нужно точнее — добавь ключевое слово (ISIN/номер регламента/название формы).</div>
+    `;
+
+    resultsEl.appendChild(div);
+
+    const toggleBtn = $(id + "_toggle");
+    const pre = $(id + "_text");
+    let expanded = false;
+    toggleBtn.onclick = () => {
+      expanded = !expanded;
+      pre.innerHTML = highlight(expanded ? full : short, query);
+      toggleBtn.textContent = expanded ? "Свернуть" : "Показать полностью";
+    };
+
+    $(id + "_copyQ").onclick = async () => {
+      await copyToClipboard(full);
+      setStatus("Цитата скопирована.", 100);
+    };
+    $(id + "_copyS").onclick = async () => {
+      await copyToClipboard(ch.source);
+      setStatus("Источник скопирован.", 100);
+    };
+  }
+}
+
+/* =========================
+   4) Извлечение текста из файлов (с ограничениями)
+========================= */
+function ext(name) {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i+1).toLowerCase() : "";
+}
+
+function isAllowedType(fileName) {
+  const e = ext(fileName);
+  const isPdf = e === "pdf";
+  const isDocx = e === "docx";
+  const isXlsx = (e === "xlsx" || e === "xls" || e === "xlsm");
+  const isText = ["txt","md","csv","json","xml","html","htm","log"].includes(e);
+
+  if (isPdf && !tPdf.checked) return false;
+  if (isDocx && !tDocx.checked) return false;
+  if (isXlsx && !tXlsx.checked) return false;
+  if (isText && !tText.checked) return false;
+
+  // неизвестные расширения — не берём
+  return isPdf || isDocx || isXlsx || isText;
+}
+
+function shouldExclude(relPath) {
+  const raw = (relPath || "").toLowerCase();
+  const parts = excludeInput.value
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (!parts.length) return false;
+  return parts.some(p => raw.includes(p));
+}
+
+function fileKey(f) {
+  const rp = (f.webkitRelativePath || f.name || "").replace(/\\/g,"/");
+  return `${rp}|${f.size}|${f.lastModified}`;
+}
+
+async function readTxtLike(file, maxChars) {
+  const t = await file.text();
+  return t.slice(0, maxChars);
+}
+
+async function readPdf(file, maxChars) {
+  if (!pdfjsLib) return "";
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  let all = "";
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    all += "\n" + tc.items.map(it => it.str).join(" ");
+    if (all.length > maxChars) break;
+  }
+  return all.slice(0, maxChars);
+}
+
+async function readDocx(file, maxChars) {
+  if (!window.mammoth) return "";
+  const buf = await file.arrayBuffer();
+  const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
+  return (res.value || "").slice(0, maxChars);
+}
+
+async function readXlsx(file, maxChars) {
+  if (!window.XLSX) return "";
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: "array" });
+  let out = "";
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const csv = window.XLSX.utils.sheet_to_csv(ws, { FS: "\t" });
+    out += `\n\n### SHEET: ${sheetName}\n` + csv;
+    if (out.length > maxChars) break;
+  }
+  return out.slice(0, maxChars);
+}
+
+async function extractText(file, maxChars) {
+  const e = ext(file.name);
+  if (["txt","md","csv","json","xml","html","htm","log"].includes(e)) return await readTxtLike(file, maxChars);
+  if (e === "pdf") return await readPdf(file, maxChars);
+  if (e === "docx") return await readDocx(file, maxChars);
+  if (e === "xlsx" || e === "xls" || e === "xlsm") return await readXlsx(file, maxChars);
+  return "";
+}
+
+/* =========================
+   5) Выбор файлов/папок
+========================= */
+async function pickFilesViaInput() {
+  return new Promise((resolve) => {
+    fileInput.onchange = () => resolve(Array.from(fileInput.files || []));
+    fileInput.click();
+  });
+}
+
+async function pickFilesViaDirectoryPicker() {
+  if (!("showDirectoryPicker" in window)) return null;
+  const dirHandle = await window.showDirectoryPicker();
+  const out = [];
+
+  async function walk(handle, prefix="") {
+    for await (const [name, child] of handle.entries()) {
+      if (child.kind === "file") {
+        const f = await child.getFile();
+        Object.defineProperty(f, "webkitRelativePath", { value: prefix + name });
+        out.push(f);
+      } else if (child.kind === "directory") {
+        await walk(child, prefix + name + "/");
       }
-      return out.slice(0, MAX_TEXT_PER_FILE);
     }
+  }
+  await walk(dirHandle, "");
+  return out;
+}
 
-    async function extractText(file) {
-      const e = ext(file.name);
-      if (["txt","md","csv","json","xml","html","htm","log"].includes(e)) return await readTxtLike(file);
-      if (e === "pdf") return await readPdf(file);
-      if (e === "docx") return await readDocx(file);
-      if (e === "xlsx" || e === "xls" || e === "xlsm") return await readXlsx(file);
-      // неизвестное — попробуем как текст
-      try { return await readTxtLike(file); } catch { return ""; }
-    }
+function resetAll() {
+  files = [];
+  chunks = [];
+  docTF = [];
+  docLen = [];
+  df = new Map();
+  avgdl = 0;
 
-    async function pickFilesViaInput() {
-      return new Promise((resolve) => {
-        fileInput.onchange = () => resolve(Array.from(fileInput.files || []));
-        fileInput.click();
-      });
-    }
+  resultsEl.innerHTML = "";
+  qEl.value = "";
+  ansEl.value = "";
 
-    async function pickFilesViaDirectoryPicker() {
-      if (!("showDirectoryPicker" in window)) return null;
-      const dirHandle = await window.showDirectoryPicker();
-      const out = [];
-      async function walk(handle, prefix="") {
-        for await (const [name, child] of handle.entries()) {
-          if (child.kind === "file") {
-            const f = await child.getFile();
-            // подставим относительный путь для удобства
-            Object.defineProperty(f, "webkitRelativePath", { value: prefix + name });
-            out.push(f);
-          } else if (child.kind === "directory") {
-            await walk(child, prefix + name + "/");
-          }
-        }
+  buildBtn.disabled = true;
+  askBtn.disabled = true;
+
+  setStatus("Готово.", 0);
+}
+
+/* =========================
+   6) Индексация с кэшем
+========================= */
+const CHUNK_SIZE = 1400;
+const CHUNK_OVERLAP = 250;
+
+async function tryLoadCachedIndex(fileKeysArr, configObj) {
+  if (!useCache.checked || !cacheIndex.checked) return null;
+  const key = "latest";
+  const rec = await idbGet(STORE_INDEX, key);
+  if (!rec) return null;
+
+  // простая проверка конфигурации + состав файлов
+  const sameConfig = JSON.stringify(rec.config) === JSON.stringify(configObj);
+  const sameFiles = JSON.stringify(rec.fileKeys) === JSON.stringify(fileKeysArr);
+
+  if (sameConfig && sameFiles && Array.isArray(rec.chunks) && rec.chunks.length) {
+    return rec.chunks;
+  }
+  return null;
+}
+
+async function saveCachedIndex(fileKeysArr, configObj, chunksArr) {
+  if (!useCache.checked || !cacheIndex.checked) return;
+  const MAX_CACHED_CHUNKS = 20000; // защита
+  if (chunksArr.length > MAX_CACHED_CHUNKS) {
+    setStatus(`Индекс слишком большой (${chunksArr.length} чанков) — не кэширую chunks.`, 100);
+    return;
+  }
+  await idbPut(STORE_INDEX, {
+    key: "latest",
+    createdAt: Date.now(),
+    config: configObj,
+    fileKeys: fileKeysArr,
+    chunks: chunksArr
+  });
+}
+
+async function getCachedText(key) {
+  if (!useCache.checked) return null;
+  const rec = await idbGet(STORE_FILES, key);
+  return rec?.text ?? null;
+}
+
+async function setCachedText(key, relPath, text) {
+  if (!useCache.checked) return;
+  await idbPut(STORE_FILES, {
+    key,
+    relPath,
+    text,
+    createdAt: Date.now()
+  });
+}
+
+async function buildIndex() {
+  if (!files.length) return;
+
+  const maxFiles = parseInt(maxFilesSel.value, 10);
+  const maxBytes = parseInt(maxMbSel.value, 10) * 1024 * 1024;
+  const maxCharsPerFile = 700_000;
+
+  // фильтруем заранее
+  let filtered = [];
+  for (const f of files) {
+    const rel = (f.webkitRelativePath || f.name || "").replace(/\\/g,"/");
+    if (!isAllowedType(f.name)) continue;
+    if (shouldExclude(rel)) continue;
+    if (f.size > maxBytes) continue;
+    filtered.push(f);
+    if (filtered.length >= maxFiles) break;
+  }
+
+  files = filtered;
+  buildBtn.disabled = files.length === 0;
+  if (!files.length) {
+    setStatus("Нет файлов после фильтров (тип/исключения/размер).", 0);
+    updateKPI(await idbCountAll());
+    return;
+  }
+
+  // config fingerprint for index cache
+  const configObj = {
+    chunkSize: CHUNK_SIZE,
+    chunkOverlap: CHUNK_OVERLAP,
+    topK: parseInt(topKSel.value, 10),
+    exclude: excludeInput.value.trim().toLowerCase(),
+    types: { pdf:tPdf.checked, docx:tDocx.checked, xlsx:tXlsx.checked, text:tText.checked },
+    maxFiles,
+    maxBytes
+  };
+
+  const fileKeysArr = files.map(fileKey);
+
+  setStatus("Пробую загрузить индекс из кэша…", 10);
+  const cachedChunks = await tryLoadCachedIndex(fileKeysArr, configObj);
+  if (cachedChunks) {
+    chunks = cachedChunks;
+    buildBM25();
+    askBtn.disabled = chunks.length === 0;
+    setStatus(`Индекс загружен из кэша. Чанков: ${chunks.length}`, 100);
+    updateKPI(await idbCountAll());
+    return;
+  }
+
+  chunks = [];
+  resultsEl.innerHTML = "";
+  ansEl.value = "";
+
+  setStatus("Извлекаю текст (с кэшем)…", 12);
+
+  let done = 0;
+  for (const f of files) {
+    done++;
+    const pct = 12 + Math.round((done / files.length) * 60);
+    const rel = (f.webkitRelativePath || f.name || "").replace(/\\/g,"/");
+    setStatus(`Читаю: ${rel}`, pct);
+
+    const key = fileKey(f);
+
+    try {
+      let text = await getCachedText(key);
+      if (!text) {
+        text = normalizeText(await extractText(f, maxCharsPerFile));
+        if (text) await setCachedText(key, rel, text);
       }
-      await walk(dirHandle, "");
-      return out;
-    }
 
-    function resetAll() {
-      files = [];
-      chunks = [];
-      docTF = [];
-      docLen = [];
-      df = new Map();
-      avgdl = 0;
-      resultsEl.innerHTML = "";
-      ansEl.value = "";
-      qEl.value = "";
-      buildBtn.disabled = true;
-      askBtn.disabled = true;
-      updateKPI();
-      setStatus("Готово.", 0);
-    }
-
-    function buildBM25() {
-      df = new Map();
-      docTF = [];
-      docLen = [];
-      let totalLen = 0;
-
-      for (const ch of chunks) {
-        const toks = tokenize(ch.text);
-        totalLen += toks.length;
-        docLen.push(toks.length);
-
-        const tf = new Map();
-        for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
-        docTF.push(tf);
-
-        for (const term of new Set(toks)) df.set(term, (df.get(term) || 0) + 1);
+      if (!text) continue;
+      const pieces = chunkText(text, CHUNK_SIZE, CHUNK_OVERLAP);
+      for (const p of pieces) {
+        chunks.push({ id: chunks.length + 1, text: p, source: rel });
       }
-      avgdl = chunks.length ? totalLen / chunks.length : 0;
+    } catch (e) {
+      console.warn("skip file", f.name, e);
     }
+  }
 
-    function bm25Score(query, idx) {
-      const N = chunks.length;
-      const k1 = 1.5;
-      const b = 0.75;
+  setStatus("Строю индекс BM25…", 78);
+  buildBM25();
 
-      const qTerms = tokenize(query);
-      const tf = docTF[idx];
-      const dl = docLen[idx] || 0;
+  // save chunks cache
+  setStatus("Сохраняю индекс в кэш…", 88);
+  await saveCachedIndex(fileKeysArr, configObj, chunks);
 
-      let score = 0;
-      for (const term of qTerms) {
-        const f = tf.get(term) || 0;
-        const n = df.get(term) || 0;
-        if (!f || !n) continue;
+  askBtn.disabled = chunks.length === 0;
+  setStatus(`Индекс готов. Чанков: ${chunks.length}`, 100);
+  updateKPI(await idbCountAll());
+}
 
-        const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
-        const denom = f + k1 * (1 - b + b * (dl / (avgdl || 1)));
-        score += idf * (f * (k1 + 1)) / (denom || 1);
-      }
-      return score;
+/* =========================
+   7) WebLLM (опционально)
+========================= */
+let webllmEngine = null;
+let webllmLoading = false;
+
+async function ensureWebLLM() {
+  if (webllmEngine || webllmLoading) return;
+  webllmLoading = true;
+  try {
+    setStatus("WebLLM: загрузка…", 65);
+    const webllm = await import("https://esm.run/@mlc-ai/web-llm");
+    const model = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+    const initProgressCallback = (p) => {
+      const txt = p?.text ? String(p.text) : "загрузка…";
+      const pr = p?.progress ? Math.round(p.progress * 100) : null;
+      setStatus(`WebLLM: ${txt}`, pr ?? 70);
+    };
+    webllmEngine = await webllm.CreateMLCEngine(model, { initProgressCallback });
+    setStatus("WebLLM готов.", 100);
+  } catch (e) {
+    console.error(e);
+    setStatus("WebLLM не поднялся (нет WebGPU/заблокирован CDN). Продолжаем без генерации.", 0);
+    webllmEngine = null;
+  } finally {
+    webllmLoading = false;
+  }
+}
+
+async function generateAnswerWithWebLLM(query, topItems) {
+  if (!webllmEngine) return "";
+  const context = topItems.map((it, n) => {
+    const ch = chunks[it.i];
+    const t = ch.text.length > 1400 ? ch.text.slice(0, 1400) + "…" : ch.text;
+    return `Источник ${n+1}: ${ch.source}\n${t}`;
+  }).join("\n\n");
+
+  const messages = [
+    { role: "system", content:
+      "Ты корпоративный помощник. Отвечай строго на основе CONTEXT. Если ответа нет — скажи 'Не найдено в базе знаний'. В конце перечисли источники (имена файлов)." },
+    { role: "user", content: `ВОПРОС: ${query}\n\nCONTEXT:\n${context}` }
+  ];
+
+  setStatus("WebLLM: генерирую ответ…", 85);
+  const reply = await webllmEngine.chat.completions.create({ messages, temperature: 0.2 });
+  setStatus("Готово.", 100);
+  return reply?.choices?.[0]?.message?.content || "";
+}
+
+/* =========================
+   8) Handlers
+========================= */
+pickDirBtn.onclick = async () => {
+  try {
+    setStatus("Выбор папки…", 0);
+    const picked = await pickFilesViaDirectoryPicker();
+    if (!picked) {
+      setStatus("showDirectoryPicker недоступен. Используй “Выбрать файлы/папку”.", 0);
+      return;
     }
+    files = picked;
+    buildBtn.disabled = files.length === 0;
+    updateKPI(await idbCountAll());
+    setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
+  } catch (e) {
+    console.error(e);
+    setStatus("Выбор папки отменён/не доступен.", 0);
+  }
+};
 
-    function searchTop(query, k=TOP_K) {
-      const scored = [];
-      for (let i = 0; i < chunks.length; i++) {
-        const s = bm25Score(query, i);
-        if (s > 0) scored.push({ i, s });
-      }
-      scored.sort((a,b)=>b.s-a.s);
-      return scored.slice(0, k);
-    }
+pickFilesBtn.onclick = async () => {
+  setStatus("Выбор файлов…", 0);
+  const picked = await pickFilesViaInput();
+  files = picked;
+  buildBtn.disabled = files.length === 0;
+  updateKPI(await idbCountAll());
+  setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
+};
 
-    function renderResults(items, query) {
-      resultsEl.innerHTML = "";
-      if (!items.length) {
-        resultsEl.innerHTML = `<div class="muted warn">Ничего релевантного не найдено. Попробуй другими словами.</div>`;
-        return;
-      }
-      for (const it of items) {
-        const ch = chunks[it.i];
-        const snip = ch.text.length > 900 ? ch.text.slice(0, 900) + "…" : ch.text;
+buildBtn.onclick = async () => {
+  await initLibs();
+  await buildIndex();
+};
 
-        const div = document.createElement("div");
-        div.className = "res";
-        div.innerHTML = `
-          <div class="top">
-            <div>
-              <div class="src">${escapeHtml(ch.source)}</div>
-              <div class="tag">chunk #${ch.id}</div>
-            </div>
-            <div class="score">score: ${it.s.toFixed(3)}</div>
-          </div>
-          <pre>${escapeHtml(snip)}</pre>
-        `;
-        resultsEl.appendChild(div);
-      }
-    }
+askBtn.onclick = async () => {
+  const query = qEl.value.trim();
+  if (!query) return;
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-      }[c]));
-    }
+  const k = parseInt(topKSel.value, 10);
+  setStatus("Ищу…", 20);
 
-    async function ensureWebLLM() {
-      if (webllmEngine || webllmLoading) return;
-      webllmLoading = true;
+  const top = searchTop(query, k);
+  renderResults(top, query);
+
+  if (useWebllm.checked) {
+    await ensureWebLLM();
+    if (webllmEngine) {
       try {
-        setStatus("WebLLM: загрузка библиотеки…", 5);
-        // CDN-импорт (без сборки). Если в компании блокируют esm.run — можно заменить на jsdelivr +esm.
-        const webllm = await import("https://esm.run/@mlc-ai/web-llm");
-
-        const model = "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // относительно легкий вариант
-        setStatus(`WebLLM: загрузка модели ${model} (первый раз может долго)…`, 8);
-
-        const initProgressCallback = (p) => {
-          // p: {progress, text, ...} — формат может отличаться, показываем максимально мягко
-          const txt = p?.text ? String(p.text) : "загрузка…";
-          const pr = p?.progress ? Math.round(p.progress * 100) : null;
-          setStatus(`WebLLM: ${txt}`, pr ?? 15);
-        };
-
-        webllmEngine = await webllm.CreateMLCEngine(model, { initProgressCallback });
-        setStatus("WebLLM готов.", 100);
+        const text = await generateAnswerWithWebLLM(query, top);
+        ansEl.value = text;
       } catch (e) {
         console.error(e);
-        webllmEngine = null;
-        setStatus("WebLLM не поднялся (возможно нет WebGPU/заблокированы CDN). Продолжаем без генерации.", 0);
-      } finally {
-        webllmLoading = false;
+        setStatus("WebLLM упал. Смотри фрагменты ниже.", 0);
       }
     }
+  } else {
+    setStatus("Готово. Смотри фрагменты ниже.", 100);
+  }
+};
 
-    async function generateAnswerWithWebLLM(query, topItems) {
-      if (!webllmEngine) return "";
-      const context = topItems.map((it, n) => {
-        const ch = chunks[it.i];
-        const t = ch.text.length > 1400 ? ch.text.slice(0, 1400) + "…" : ch.text;
-        return `Источник ${n+1}: ${ch.source}\\n${t}`;
-      }).join("\\n\\n");
+resetBtn.onclick = async () => {
+  resetAll();
+  updateKPI(await idbCountAll());
+};
 
-      const messages = [
-        {
-          role: "system",
-          content:
-`Ты — корпоративный помощник. Отвечай строго на основе CONTEXT.
-Если в CONTEXT нет ответа — так и скажи. В конце дай список источников (имена файлов).`
-        },
-        { role: "user", content: `ВОПРОС: ${query}\\n\\nCONTEXT:\\n${context}` }
-      ];
+clearCacheBtn.onclick = async () => {
+  await idbClearAll();
+  setStatus("Кэш очищен.", 100);
+  updateKPI(await idbCountAll());
+};
 
-      setStatus("WebLLM: генерирую ответ…", 70);
-      const reply = await webllmEngine.chat.completions.create({
-        messages,
-        temperature: 0.2,
-      });
-      setStatus("Готово.", 100);
-      return reply?.choices?.[0]?.message?.content || "";
-    }
-
-    // --- UI handlers ---
-    pickDirBtn.onclick = async () => {
-      try {
-        setStatus("Выбор папки…", 0);
-        const picked = await pickFilesViaDirectoryPicker();
-        if (!picked) {
-          setStatus("В этом браузере showDirectoryPicker недоступен. Используй “Выбрать файлы (или папку)”.", 0);
-          return;
-        }
-        files = picked.slice(0, MAX_FILES);
-        buildBtn.disabled = files.length === 0;
-        updateKPI();
-        setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
-      } catch (e) {
-        console.error(e);
-        setStatus("Выбор папки отменён/не доступен.", 0);
-      }
-    };
-
-    pickFilesBtn.onclick = async () => {
-      setStatus("Выбор файлов…", 0);
-      const picked = await pickFilesViaInput();
-      files = picked.slice(0, MAX_FILES);
-      buildBtn.disabled = files.length === 0;
-      updateKPI();
-      setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
-    };
-
-    buildBtn.onclick = async () => {
-      if (!files.length) return;
-      chunks = [];
-      resultsEl.innerHTML = "";
-      ansEl.value = "";
-      askBtn.disabled = true;
-
-      setStatus("Извлекаю текст…", 1);
-
-      let done = 0;
-      for (const f of files) {
-        done++;
-        const pct = Math.round((done / files.length) * 65);
-        setStatus(`Читаю: ${f.webkitRelativePath || f.name}`, pct);
-
-        try {
-          const text = normalizeText(await extractText(f));
-          if (!text) continue;
-
-          const pieces = chunkText(text);
-          const src = f.webkitRelativePath || f.name;
-          for (const p of pieces) {
-            chunks.push({ id: chunks.length + 1, text: p, source: src });
-          }
-        } catch (e) {
-          console.warn("skip file", f.name, e);
-        }
-      }
-
-      setStatus("Строю индекс BM25…", 75);
-      buildBM25();
-
-      updateKPI();
-      askBtn.disabled = chunks.length === 0;
-      setStatus(`Индекс готов. Можно спрашивать. (Чанков: ${chunks.length})`, 100);
-    };
-
-    askBtn.onclick = async () => {
-      const query = qEl.value.trim();
-      if (!query) return;
-
-      ansEl.value = "";
-      setStatus("Ищу…", 10);
-
-      const top = searchTop(query, TOP_K);
-      renderResults(top, query);
-
-      // опциональная генерация
-      if (useWebllm.checked) {
-        await ensureWebLLM();
-        if (webllmEngine) {
-          try {
-            const text = await generateAnswerWithWebLLM(query, top);
-            ansEl.value = text;
-          } catch (e) {
-            console.error(e);
-            setStatus("WebLLM ответ не сгенерировал (ошибка). См. фрагменты ниже.", 0);
-          }
-        }
-      } else {
-        setStatus("Готово. Смотри фрагменты ниже.", 100);
-      }
-    };
-
-    clearBtn.onclick = resetAll;
-
-    // начальное состояние
-    resetAll();
-  </script>
+/* старт */
+(async () => {
+  resetAll();
+  updateKPI(await idbCountAll());
+  // не грузим библиотеки сразу, только по Build (быстрее открытие страницы)
+})();
+</script>
 </body>
 </html>
