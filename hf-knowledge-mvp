@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HF Knowledge MVP (local-in-browser)</title>
+  <style>
+    :root { --b:#e5e7eb; --t:#0f172a; --m:#64748b; --p:#2563eb; --bg:#ffffff; }
+    body{font-family:Inter,system-ui,Segoe UI,Arial; margin:0; background:#f8fafc; color:var(--t);}
+    .wrap{max-width:1100px; margin:24px auto; padding:0 16px;}
+    .card{background:var(--bg); border:1px solid var(--b); border-radius:14px; padding:16px; box-shadow:0 4px 14px rgba(15,23,42,.06);}
+    h1{font-size:20px; margin:0 0 10px;}
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
+    button{
+      border:1px solid var(--b); background:#fff; border-radius:10px; padding:10px 12px;
+      cursor:pointer; font-weight:600;
+    }
+    button.primary{background:var(--p); color:#fff; border-color:var(--p);}
+    button:disabled{opacity:.55; cursor:not-allowed;}
+    .muted{color:var(--m); font-size:13px; line-height:1.35;}
+    .kpi{font-size:13px; color:var(--m);}
+    textarea,input{width:100%; border:1px solid var(--b); border-radius:12px; padding:12px; font:inherit;}
+    textarea{min-height:80px; resize:vertical;}
+    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:12px;}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+    .progress{height:10px; border-radius:999px; background:#eef2ff; overflow:hidden; border:1px solid #e0e7ff;}
+    .bar{height:100%; width:0%; background:var(--p); transition:width .15s;}
+    .hr{height:1px; background:var(--b); margin:14px 0;}
+    .pill{display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--b); border-radius:999px; background:#fff;}
+    .results{display:flex; flex-direction:column; gap:10px; margin-top:10px;}
+    .res{border:1px solid var(--b); border-radius:12px; padding:12px; background:#fff;}
+    .res .top{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
+    .res .src{font-weight:700; font-size:13px;}
+    .res .score{color:var(--m); font-size:12px;}
+    .res pre{white-space:pre-wrap; margin:8px 0 0; color:#111827; font-size:13px; line-height:1.35;}
+    .tag{font-size:12px; color:var(--m);}
+    .warn{color:#b45309;}
+    .ok{color:#16a34a;}
+  </style>
+
+  <!-- Mammoth (DOCX -> text) -->
+  <script src="https://unpkg.com/mammoth@1.2.0/mammoth.browser.min.js"></script>
+  <!-- SheetJS (XLSX -> text) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>HF Knowledge MVP — локальная база знаний в браузере</h1>
+      <div class="muted">
+        Данные не отправляются на сервер: ты выбираешь папку/файлы, браузер читает их и строит индекс локально.
+        PDF разбираем через PDF.js (getTextContent), DOCX через Mammoth, XLSX через SheetJS.
+      </div>
+      <div class="hr"></div>
+
+      <div class="row">
+        <button id="pickDirBtn" class="primary">Выбрать папку</button>
+        <button id="pickFilesBtn">Выбрать файлы (или папку)</button>
+        <input id="fileInput" type="file" multiple webkitdirectory style="display:none" />
+
+        <button id="buildBtn" class="primary" disabled>Построить индекс</button>
+        <span class="kpi" id="kpi">Файлы: 0 • Чанки: 0</span>
+
+        <span class="pill">
+          <input id="useWebllm" type="checkbox" />
+          <label for="useWebllm" class="muted" style="cursor:pointer;">Генерировать ответ WebLLM (тяжёлое, опционально)</label>
+        </span>
+      </div>
+
+      <div style="margin-top:10px">
+        <div class="progress"><div id="bar" class="bar"></div></div>
+        <div class="muted" id="status" style="margin-top:6px;">Готово.</div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="grid">
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Вопрос</div>
+          <textarea id="q" placeholder="Например: 'Где описан процесс расчёта FIFO?'"></textarea>
+          <div class="row" style="margin-top:10px;">
+            <button id="askBtn" class="primary" disabled>Спросить</button>
+            <button id="clearBtn">Очистить</button>
+          </div>
+          <div class="muted" style="margin-top:8px;">
+            По умолчанию ответ — это топ-фрагменты + источники (надежнее, чем галлюцинации).
+            WebLLM добавляет “красивый” текстовый ответ, но может быть тяжелым и требовать WebGPU.
+          </div>
+        </div>
+
+        <div>
+          <div class="muted" style="margin-bottom:6px;">Ответ (если WebLLM включён)</div>
+          <textarea id="answer" placeholder="Тут появится сгенерированный ответ (опционально)"></textarea>
+          <div class="muted" style="margin-top:8px;">
+            Если WebLLM не включён — просто смотри “Найденные фрагменты” ниже.
+          </div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+      <div>
+        <div class="muted">Найденные фрагменты (доказательства)</div>
+        <div id="results" class="results"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // --- PDF.js (ESM) ---
+    // Берём с cdnjs актуальную ESM-сборку.
+    // Если корпоративная сеть блокирует cdnjs — заменишь на другой CDN (jsdelivr/npm pdfjs-dist).
+    import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.mjs";
+
+    const $ = (id) => document.getElementById(id);
+
+    const pickDirBtn = $("pickDirBtn");
+    const pickFilesBtn = $("pickFilesBtn");
+    const fileInput = $("fileInput");
+    const buildBtn = $("buildBtn");
+    const askBtn = $("askBtn");
+    const clearBtn = $("clearBtn");
+    const useWebllm = $("useWebllm");
+
+    const statusEl = $("status");
+    const barEl = $("bar");
+    const kpiEl = $("kpi");
+    const resultsEl = $("results");
+    const qEl = $("q");
+    const ansEl = $("answer");
+
+    // Данные
+    /** @type {File[]} */
+    let files = [];
+    /** chunks: { id, text, source } */
+    let chunks = [];
+
+    // BM25 индекс
+    let docTF = [];   // Array<Map<term, tf>>
+    let docLen = [];  // Array<number>
+    let df = new Map();
+    let avgdl = 0;
+
+    // WebLLM
+    let webllmEngine = null;
+    let webllmLoading = false;
+
+    // Настройки MVP
+    const MAX_FILES = 800;            // чтобы браузер не умер
+    const MAX_TEXT_PER_FILE = 700_000; // ограничение на текст из одного файла
+    const CHUNK_SIZE = 1400;          // символов
+    const CHUNK_OVERLAP = 250;        // символов
+    const TOP_K = 6;
+
+    const stopwords = new Set([
+      // RU
+      "и","в","во","на","к","ко","с","со","из","у","о","об","от","до","для","по","при","над","под","это","как","что","или","не","да",
+      "мы","вы","они","он","она","оно","я","ты","а","но","же","ли","бы","то","там","тут","где","когда",
+      // EN
+      "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were","be","been","by","as","at","from","that","this"
+    ]);
+
+    function setStatus(text, pct=null) {
+      statusEl.textContent = text;
+      if (pct !== null) barEl.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function updateKPI() {
+      kpiEl.textContent = `Файлы: ${files.length} • Чанки: ${chunks.length}`;
+    }
+
+    function ext(name) {
+      const i = name.lastIndexOf(".");
+      return i >= 0 ? name.slice(i+1).toLowerCase() : "";
+    }
+
+    function normalizeText(s) {
+      return (s || "")
+        .replace(/\u0000/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function chunkText(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP) {
+      const out = [];
+      if (!text) return out;
+      let i = 0;
+      while (i < text.length) {
+        const piece = text.slice(i, i + size);
+        if (piece.trim().length > 40) out.push(piece.trim());
+        i += Math.max(50, size - overlap);
+      }
+      return out;
+    }
+
+    function tokenize(text) {
+      // простая токенизация: буквы/цифры, в нижний регистр
+      return normalizeText(text)
+        .toLowerCase()
+        .replace(/[^a-zа-я0-9]+/giu, " ")
+        .split(" ")
+        .filter(t => t.length >= 2 && !stopwords.has(t));
+    }
+
+    async function readTxtLike(file) {
+      const t = await file.text();
+      return t.slice(0, MAX_TEXT_PER_FILE);
+    }
+
+    async function readPdf(file) {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      let all = "";
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const tc = await page.getTextContent();
+        const pageText = tc.items.map(it => it.str).join(" ");
+        all += "\\n" + pageText;
+        if (all.length > MAX_TEXT_PER_FILE) break;
+      }
+      return all.slice(0, MAX_TEXT_PER_FILE);
+    }
+
+    async function readDocx(file) {
+      const buf = await file.arrayBuffer();
+      // Mammoth: extractRawText
+      const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
+      return (res.value || "").slice(0, MAX_TEXT_PER_FILE);
+    }
+
+    async function readXlsx(file) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      let out = "";
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        // to CSV — быстро и нормально для индекса
+        const csv = XLSX.utils.sheet_to_csv(ws, { FS: "\\t" });
+        out += `\\n\\n### SHEET: ${sheetName}\\n` + csv;
+        if (out.length > MAX_TEXT_PER_FILE) break;
+      }
+      return out.slice(0, MAX_TEXT_PER_FILE);
+    }
+
+    async function extractText(file) {
+      const e = ext(file.name);
+      if (["txt","md","csv","json","xml","html","htm","log"].includes(e)) return await readTxtLike(file);
+      if (e === "pdf") return await readPdf(file);
+      if (e === "docx") return await readDocx(file);
+      if (e === "xlsx" || e === "xls" || e === "xlsm") return await readXlsx(file);
+      // неизвестное — попробуем как текст
+      try { return await readTxtLike(file); } catch { return ""; }
+    }
+
+    async function pickFilesViaInput() {
+      return new Promise((resolve) => {
+        fileInput.onchange = () => resolve(Array.from(fileInput.files || []));
+        fileInput.click();
+      });
+    }
+
+    async function pickFilesViaDirectoryPicker() {
+      if (!("showDirectoryPicker" in window)) return null;
+      const dirHandle = await window.showDirectoryPicker();
+      const out = [];
+      async function walk(handle, prefix="") {
+        for await (const [name, child] of handle.entries()) {
+          if (child.kind === "file") {
+            const f = await child.getFile();
+            // подставим относительный путь для удобства
+            Object.defineProperty(f, "webkitRelativePath", { value: prefix + name });
+            out.push(f);
+          } else if (child.kind === "directory") {
+            await walk(child, prefix + name + "/");
+          }
+        }
+      }
+      await walk(dirHandle, "");
+      return out;
+    }
+
+    function resetAll() {
+      files = [];
+      chunks = [];
+      docTF = [];
+      docLen = [];
+      df = new Map();
+      avgdl = 0;
+      resultsEl.innerHTML = "";
+      ansEl.value = "";
+      qEl.value = "";
+      buildBtn.disabled = true;
+      askBtn.disabled = true;
+      updateKPI();
+      setStatus("Готово.", 0);
+    }
+
+    function buildBM25() {
+      df = new Map();
+      docTF = [];
+      docLen = [];
+      let totalLen = 0;
+
+      for (const ch of chunks) {
+        const toks = tokenize(ch.text);
+        totalLen += toks.length;
+        docLen.push(toks.length);
+
+        const tf = new Map();
+        for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+        docTF.push(tf);
+
+        for (const term of new Set(toks)) df.set(term, (df.get(term) || 0) + 1);
+      }
+      avgdl = chunks.length ? totalLen / chunks.length : 0;
+    }
+
+    function bm25Score(query, idx) {
+      const N = chunks.length;
+      const k1 = 1.5;
+      const b = 0.75;
+
+      const qTerms = tokenize(query);
+      const tf = docTF[idx];
+      const dl = docLen[idx] || 0;
+
+      let score = 0;
+      for (const term of qTerms) {
+        const f = tf.get(term) || 0;
+        const n = df.get(term) || 0;
+        if (!f || !n) continue;
+
+        const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
+        const denom = f + k1 * (1 - b + b * (dl / (avgdl || 1)));
+        score += idf * (f * (k1 + 1)) / (denom || 1);
+      }
+      return score;
+    }
+
+    function searchTop(query, k=TOP_K) {
+      const scored = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const s = bm25Score(query, i);
+        if (s > 0) scored.push({ i, s });
+      }
+      scored.sort((a,b)=>b.s-a.s);
+      return scored.slice(0, k);
+    }
+
+    function renderResults(items, query) {
+      resultsEl.innerHTML = "";
+      if (!items.length) {
+        resultsEl.innerHTML = `<div class="muted warn">Ничего релевантного не найдено. Попробуй другими словами.</div>`;
+        return;
+      }
+      for (const it of items) {
+        const ch = chunks[it.i];
+        const snip = ch.text.length > 900 ? ch.text.slice(0, 900) + "…" : ch.text;
+
+        const div = document.createElement("div");
+        div.className = "res";
+        div.innerHTML = `
+          <div class="top">
+            <div>
+              <div class="src">${escapeHtml(ch.source)}</div>
+              <div class="tag">chunk #${ch.id}</div>
+            </div>
+            <div class="score">score: ${it.s.toFixed(3)}</div>
+          </div>
+          <pre>${escapeHtml(snip)}</pre>
+        `;
+        resultsEl.appendChild(div);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+      }[c]));
+    }
+
+    async function ensureWebLLM() {
+      if (webllmEngine || webllmLoading) return;
+      webllmLoading = true;
+      try {
+        setStatus("WebLLM: загрузка библиотеки…", 5);
+        // CDN-импорт (без сборки). Если в компании блокируют esm.run — можно заменить на jsdelivr +esm.
+        const webllm = await import("https://esm.run/@mlc-ai/web-llm");
+
+        const model = "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // относительно легкий вариант
+        setStatus(`WebLLM: загрузка модели ${model} (первый раз может долго)…`, 8);
+
+        const initProgressCallback = (p) => {
+          // p: {progress, text, ...} — формат может отличаться, показываем максимально мягко
+          const txt = p?.text ? String(p.text) : "загрузка…";
+          const pr = p?.progress ? Math.round(p.progress * 100) : null;
+          setStatus(`WebLLM: ${txt}`, pr ?? 15);
+        };
+
+        webllmEngine = await webllm.CreateMLCEngine(model, { initProgressCallback });
+        setStatus("WebLLM готов.", 100);
+      } catch (e) {
+        console.error(e);
+        webllmEngine = null;
+        setStatus("WebLLM не поднялся (возможно нет WebGPU/заблокированы CDN). Продолжаем без генерации.", 0);
+      } finally {
+        webllmLoading = false;
+      }
+    }
+
+    async function generateAnswerWithWebLLM(query, topItems) {
+      if (!webllmEngine) return "";
+      const context = topItems.map((it, n) => {
+        const ch = chunks[it.i];
+        const t = ch.text.length > 1400 ? ch.text.slice(0, 1400) + "…" : ch.text;
+        return `Источник ${n+1}: ${ch.source}\\n${t}`;
+      }).join("\\n\\n");
+
+      const messages = [
+        {
+          role: "system",
+          content:
+`Ты — корпоративный помощник. Отвечай строго на основе CONTEXT.
+Если в CONTEXT нет ответа — так и скажи. В конце дай список источников (имена файлов).`
+        },
+        { role: "user", content: `ВОПРОС: ${query}\\n\\nCONTEXT:\\n${context}` }
+      ];
+
+      setStatus("WebLLM: генерирую ответ…", 70);
+      const reply = await webllmEngine.chat.completions.create({
+        messages,
+        temperature: 0.2,
+      });
+      setStatus("Готово.", 100);
+      return reply?.choices?.[0]?.message?.content || "";
+    }
+
+    // --- UI handlers ---
+    pickDirBtn.onclick = async () => {
+      try {
+        setStatus("Выбор папки…", 0);
+        const picked = await pickFilesViaDirectoryPicker();
+        if (!picked) {
+          setStatus("В этом браузере showDirectoryPicker недоступен. Используй “Выбрать файлы (или папку)”.", 0);
+          return;
+        }
+        files = picked.slice(0, MAX_FILES);
+        buildBtn.disabled = files.length === 0;
+        updateKPI();
+        setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
+      } catch (e) {
+        console.error(e);
+        setStatus("Выбор папки отменён/не доступен.", 0);
+      }
+    };
+
+    pickFilesBtn.onclick = async () => {
+      setStatus("Выбор файлов…", 0);
+      const picked = await pickFilesViaInput();
+      files = picked.slice(0, MAX_FILES);
+      buildBtn.disabled = files.length === 0;
+      updateKPI();
+      setStatus(`Выбрано файлов: ${files.length}. Нажми “Построить индекс”.`, 0);
+    };
+
+    buildBtn.onclick = async () => {
+      if (!files.length) return;
+      chunks = [];
+      resultsEl.innerHTML = "";
+      ansEl.value = "";
+      askBtn.disabled = true;
+
+      setStatus("Извлекаю текст…", 1);
+
+      let done = 0;
+      for (const f of files) {
+        done++;
+        const pct = Math.round((done / files.length) * 65);
+        setStatus(`Читаю: ${f.webkitRelativePath || f.name}`, pct);
+
+        try {
+          const text = normalizeText(await extractText(f));
+          if (!text) continue;
+
+          const pieces = chunkText(text);
+          const src = f.webkitRelativePath || f.name;
+          for (const p of pieces) {
+            chunks.push({ id: chunks.length + 1, text: p, source: src });
+          }
+        } catch (e) {
+          console.warn("skip file", f.name, e);
+        }
+      }
+
+      setStatus("Строю индекс BM25…", 75);
+      buildBM25();
+
+      updateKPI();
+      askBtn.disabled = chunks.length === 0;
+      setStatus(`Индекс готов. Можно спрашивать. (Чанков: ${chunks.length})`, 100);
+    };
+
+    askBtn.onclick = async () => {
+      const query = qEl.value.trim();
+      if (!query) return;
+
+      ansEl.value = "";
+      setStatus("Ищу…", 10);
+
+      const top = searchTop(query, TOP_K);
+      renderResults(top, query);
+
+      // опциональная генерация
+      if (useWebllm.checked) {
+        await ensureWebLLM();
+        if (webllmEngine) {
+          try {
+            const text = await generateAnswerWithWebLLM(query, top);
+            ansEl.value = text;
+          } catch (e) {
+            console.error(e);
+            setStatus("WebLLM ответ не сгенерировал (ошибка). См. фрагменты ниже.", 0);
+          }
+        }
+      } else {
+        setStatus("Готово. Смотри фрагменты ниже.", 100);
+      }
+    };
+
+    clearBtn.onclick = resetAll;
+
+    // начальное состояние
+    resetAll();
+  </script>
+</body>
+</html>
